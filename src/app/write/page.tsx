@@ -1,19 +1,14 @@
-import {prisma} from '@/lib/db';
 import WriteForm from '@/components/editor/WriteForm';
-import {Category} from '@/types';
+import {categoryService} from '@/lib/services/categoryService';
+import {draftService} from '@/lib/services/draftService';
 
 export const dynamic = 'force-dynamic';
 
 export default async function WritePage() {
-    const [dbCategories, draft] = await Promise.all([
-        prisma.category.findMany({orderBy: {createdAt: 'asc'}}),
-        prisma.draft.findUnique({where: {id: 'draft'}}),
+    const [categories, draft] = await Promise.all([
+        categoryService.getAll(),
+        draftService.get(),
     ]);
-
-    const categories: Category[] = dbCategories.map((c) => ({
-        ...c,
-        createdAt: c.createdAt.toISOString(),
-    }));
 
     const draftValues = draft
         ? {

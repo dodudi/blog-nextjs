@@ -1,11 +1,15 @@
+import {cache} from 'react';
 import {notFound} from 'next/navigation';
 import type {Metadata} from 'next';
-import {prisma} from '@/lib/db';
-import {Post, Category} from '@/types';
 import {summarize} from '@/lib/readingTime';
+import {postService} from '@/lib/services/postService';
+import {categoryService} from '@/lib/services/categoryService';
+import {NotFoundError} from '@/lib/errors';
 import PostDetailWrapper from './PostDetailWrapper';
 
 export const revalidate = 0;
+
+const getPost = cache((id: string) => postService.getById(id));
 
 export async function generateMetadata({
     params,
@@ -13,30 +17,32 @@ export async function generateMetadata({
     params: Promise<{id: string}>;
 }): Promise<Metadata> {
     const {id} = await params;
-    const post = await prisma.post.findUnique({where: {id}});
-    if (!post) return {};
+    try {
+        const post = await getPost(id);
+        const description = summarize(post.content).slice(0, 160);
 
-    const description = summarize(post.content).slice(0, 160);
-
-    return {
-        title: post.title,
-        description,
-        openGraph: {
+        return {
             title: post.title,
             description,
-            type: 'article',
-            publishedTime: post.createdAt.toISOString(),
-            modifiedTime: post.updatedAt.toISOString(),
-            tags: post.tags,
-            ...(post.image ? {images: [{url: post.image}]} : {}),
-        },
-        twitter: {
-            card: 'summary_large_image',
-            title: post.title,
-            description,
-            ...(post.image ? {images: [post.image]} : {}),
-        },
-    };
+            openGraph: {
+                title: post.title,
+                description,
+                type: 'article',
+                publishedTime: post.createdAt,
+                modifiedTime: post.updatedAt,
+                tags: post.tags,
+                ...(post.image ? {images: [{url: post.image}]} : {}),
+            },
+            twitter: {
+                card: 'summary_large_image',
+                title: post.title,
+                description,
+                ...(post.image ? {images: [post.image]} : {}),
+            },
+        };
+    } catch {
+        return {};
+    }
 }
 
 export default async function PostPage({
@@ -46,24 +52,18 @@ export default async function PostPage({
 }) {
     const {id} = await params;
 
-    const [dbPost, dbCategories] = await Promise.all([
-        prisma.post.findUnique({where: {id}}),
-        prisma.category.findMany({orderBy: {createdAt: 'asc'}}),
-    ]);
+    let post: Awaited<ReturnType<typeof getPost>>;
+    let categories: Awaited<ReturnType<typeof categoryService.getAll>>;
 
-    if (!dbPost) notFound();
-
-    const post: Post = {
-        ...dbPost,
-        image: dbPost.image ?? null,
-        createdAt: dbPost.createdAt.toISOString(),
-        updatedAt: dbPost.updatedAt.toISOString(),
-    };
-
-    const categories: Category[] = dbCategories.map((c) => ({
-        ...c,
-        createdAt: c.createdAt.toISOString(),
-    }));
+    try {
+        [post, categories] = await Promise.all([
+            getPost(id),
+            categoryService.getAll(),
+        ]);
+    } catch (e) {
+        if (e instanceof NotFoundError) notFound();
+        throw e;
+    }
 
     return <PostDetailWrapper post={post} categories={categories}/>;
 }

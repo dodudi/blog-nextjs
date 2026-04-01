@@ -2,7 +2,6 @@
 
 import {useState} from 'react';
 import {Category} from '@/types';
-import {addCategory, deleteCategory} from '@/lib/actions/categories';
 import Button from '@/components/ui/Button';
 
 interface Props {
@@ -12,25 +11,51 @@ interface Props {
 export default function CategoryManager({initialCategories}: Props) {
     const [categories, setCategories] = useState(initialCategories);
     const [input, setInput] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
     async function handleAdd() {
         const name = input.trim();
         if (!name) return;
-        if (categories.some((c) => c.name === name)) {
+        setLoading(true);
+        setError(null);
+        try {
+            const res = await fetch('/api/categories', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name}),
+            });
+            const body = await res.json();
+            if (!res.ok) {
+                setError(body.error?.message ?? '카테고리 추가에 실패했습니다.');
+                return;
+            }
+            setCategories((prev) => [...prev, body.data]);
             setInput('');
-            return;
+        } catch {
+            setError('카테고리 추가에 실패했습니다.');
+        } finally {
+            setLoading(false);
         }
-        setInput('');
-        await addCategory(name);
-        setCategories((prev) => [
-            ...prev,
-            {id: Date.now().toString(), name, createdAt: new Date().toISOString()},
-        ]);
     }
 
     async function handleDelete(id: string) {
-        await deleteCategory(id);
-        setCategories((prev) => prev.filter((c) => c.id !== id));
+        setDeletingId(id);
+        setError(null);
+        try {
+            const res = await fetch(`/api/categories/${id}`, {method: 'DELETE'});
+            if (!res.ok) {
+                const body = await res.json();
+                setError(body.error?.message ?? '카테고리 삭제에 실패했습니다.');
+                return;
+            }
+            setCategories((prev) => prev.filter((c) => c.id !== id));
+        } catch {
+            setError('카테고리 삭제에 실패했습니다.');
+        } finally {
+            setDeletingId(null);
+        }
     }
 
     return (
@@ -47,10 +72,12 @@ export default function CategoryManager({initialCategories}: Props) {
                     className="flex-1 border border-zinc-200 rounded-md px-3 py-2 text-sm text-zinc-700 outline-none focus:border-zinc-400 transition-colors"
                     aria-label="카테고리 이름"
                 />
-                <Button onClick={handleAdd} aria-label="카테고리 추가">
-                    추가
+                <Button onClick={handleAdd} disabled={loading} aria-label="카테고리 추가">
+                    {loading ? '추가 중...' : '추가'}
                 </Button>
             </div>
+
+            {error && <p className="text-sm text-red-500">{error}</p>}
 
             <ul className="space-y-2">
                 {categories.length === 0 && (
@@ -64,7 +91,8 @@ export default function CategoryManager({initialCategories}: Props) {
                         <span className="text-sm text-zinc-800">{c.name}</span>
                         <button
                             onClick={() => handleDelete(c.id)}
-                            className="text-zinc-400 hover:text-red-500 transition-colors text-lg leading-none"
+                            disabled={deletingId === c.id}
+                            className="text-zinc-400 hover:text-red-500 transition-colors text-lg leading-none disabled:opacity-40 disabled:cursor-not-allowed"
                             aria-label={`${c.name} 카테고리 삭제`}
                         >
                             ×

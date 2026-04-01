@@ -1,18 +1,10 @@
-import {prisma} from '@/lib/db';
 import CategoryManager from '@/components/settings/CategoryManager';
-import {Category} from '@/types';
+import {categoryService} from '@/lib/services/categoryService';
 
 export const dynamic = 'force-dynamic';
 
 export default async function CategoriesPage() {
-    const dbCategories = await prisma.category.findMany({
-        orderBy: {createdAt: 'asc'},
-    });
-
-    const categories: Category[] = dbCategories.map((c) => ({
-        ...c,
-        createdAt: c.createdAt.toISOString(),
-    }));
+    const categories = await categoryService.getAll();
 
     return (
         <div className="mx-auto max-w-[680px] px-4 py-6 sm:py-10">

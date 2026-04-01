@@ -1,8 +1,8 @@
 'use server';
 
-import {prisma} from '@/lib/db';
 import {revalidatePath} from 'next/cache';
 import {redirect} from 'next/navigation';
+import {postService} from '@/lib/services/postService';
 
 interface PostData {
     title: string;
@@ -14,39 +14,13 @@ interface PostData {
 }
 
 export async function createPost(data: PostData) {
-    await prisma.post.create({
-        data: {
-            title: data.title,
-            content: data.content,
-            category: data.category,
-            tags: data.tags,
-            image: data.image,
-            date: data.date,
-        },
-    });
+    await postService.create(data);
     revalidatePath('/');
     redirect('/');
 }
 
-// PostDetail 인플레이스 편집용 — redirect 없이 업데이트만 수행
-export async function updatePostInPlace(id: string, data: PostData) {
-    await prisma.post.update({
-        where: {id},
-        data: {
-            title: data.title,
-            content: data.content,
-            category: data.category,
-            tags: data.tags,
-            image: data.image,
-            date: data.date,
-        },
-    });
-    revalidatePath('/');
-    revalidatePath(`/post/${id}`);
-}
-
 export async function deletePost(id: string) {
-    await prisma.post.delete({where: {id}});
+    await postService.delete(id);
     revalidatePath('/');
     redirect('/');
 }

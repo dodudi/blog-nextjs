@@ -1,30 +1,19 @@
-import {prisma} from '@/lib/db';
 import PostFeed from '@/components/post/PostFeed';
 import DraftBanner from '@/components/editor/DraftBanner';
-import {Category, Post} from '@/types';
+import {postService} from '@/lib/services/postService';
+import {categoryService} from '@/lib/services/categoryService';
+import {draftService} from '@/lib/services/draftService';
 
 export const revalidate = 0;
 
 export default async function HomePage() {
-    const [dbPosts, dbCategories, draft] = await Promise.all([
-        prisma.post.findMany({orderBy: {createdAt: 'desc'}}),
-        prisma.category.findMany({orderBy: {createdAt: 'asc'}}),
-        prisma.draft.findUnique({where: {id: 'draft'}}),
+    const [posts, categories, draft] = await Promise.all([
+        postService.getAll(),
+        categoryService.getAll(),
+        draftService.get(),
     ]);
 
-    const posts: Post[] = dbPosts.map((p) => ({
-        ...p,
-        image: p.image ?? null,
-        createdAt: p.createdAt.toISOString(),
-        updatedAt: p.updatedAt.toISOString(),
-    }));
-
-    const categories: Category[] = dbCategories.map((c) => ({
-        ...c,
-        createdAt: c.createdAt.toISOString(),
-    }));
-
-    const allTags = [...new Set(dbPosts.flatMap((p) => p.tags))].sort();
+    const allTags = [...new Set(posts.flatMap((p) => p.tags))].sort();
 
     return (
         <div className="mx-auto max-w-[720px] px-4 py-6 sm:py-10">

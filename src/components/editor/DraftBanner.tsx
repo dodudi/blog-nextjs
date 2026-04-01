@@ -1,13 +1,12 @@
 'use client';
 
 import {useRouter} from 'next/navigation';
-import {deleteDraft} from '@/lib/actions/draft';
 
 export default function DraftBanner() {
     const router = useRouter();
 
     async function handleDismiss() {
-        await deleteDraft();
+        await fetch('/api/draft', {method: 'DELETE'});
         router.refresh();
     }
 

@@ -4,7 +4,6 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import dynamic from 'next/dynamic';
 import {Category} from '@/types';
 import {createPost} from '@/lib/actions/posts';
-import {deleteDraft, saveDraft} from '@/lib/actions/draft';
 import Button from '@/components/ui/Button';
 import TagBadge from '@/components/ui/TagBadge';
 import {readingTime} from '@/lib/readingTime';
@@ -45,9 +44,19 @@ export default function WriteForm({categories, defaultValues}: Props) {
     const scheduleDraftSave = useCallback(() => {
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         saveTimerRef.current = setTimeout(async () => {
-            await saveDraft({title, content, category, tags, image});
-            setDraftStatus('saved');
-            setTimeout(() => setDraftStatus(null), 2000);
+            try {
+                const res = await fetch('/api/draft', {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({title, content, category, tags, image}),
+                });
+                if (res.ok) {
+                    setDraftStatus('saved');
+                    setTimeout(() => setDraftStatus(null), 2000);
+                }
+            } catch {
+                // silent fail
+            }
         }, 2000);
     }, [title, content, category, tags, image]);
 
@@ -89,7 +98,7 @@ export default function WriteForm({categories, defaultValues}: Props) {
         setLoading(true);
 
         try {
-            await deleteDraft();
+            await fetch('/api/draft', {method: 'DELETE'}).catch(() => {});
             await createPost({title: title.trim(), content, category, tags, image, date});
         } catch {
             setLoading(false);

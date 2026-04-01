@@ -6,7 +6,7 @@ import {Crepe, CrepeFeature} from '@milkdown/crepe';
 import '@milkdown/crepe/theme/common/style.css';
 import '@milkdown/crepe/theme/frame.css';
 import {Category, Post} from '@/types';
-import {deletePost, updatePostInPlace} from '@/lib/actions/posts';
+import {deletePost} from '@/lib/actions/posts';
 import TagBadge from '@/components/ui/TagBadge';
 import Button from '@/components/ui/Button';
 import {readingTime} from '@/lib/readingTime';
@@ -26,6 +26,7 @@ export default function PostDetail({post, categories}: Props) {
     const [tagInput, setTagInput] = useState('');
     const [date, setDate] = useState(post.date);
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const [editorKey, setEditorKey] = useState(0);
 
     const containerRef = useRef<HTMLDivElement>(null);
@@ -83,6 +84,7 @@ export default function PostDetail({post, categories}: Props) {
         setTags(post.tags);
         setDate(post.date);
         setTagInput('');
+        setError(null);
         contentRef.current = savedContentRef.current;
         setIsEditing(false);
         setEditorKey((k) => k + 1);
@@ -91,23 +93,33 @@ export default function PostDetail({post, categories}: Props) {
     async function handleSave() {
         if (!title.trim()) return;
         setLoading(true);
+        setError(null);
         try {
-            await updatePostInPlace(post.id, {
-                title: title.trim(),
-                content: contentRef.current,
-                category,
-                tags,
-                image: post.image,
-                date,
+            const res = await fetch(`/api/posts/${post.id}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    title: title.trim(),
+                    content: contentRef.current,
+                    category,
+                    tags,
+                    image: post.image,
+                    date,
+                }),
             });
-            // redirect()가 같은 URL이면 소프트 내비게이션으로 state가 유지되므로
-            // 저장 성공 후 직접 상태를 초기화하고 서버 데이터만 갱신
+            if (!res.ok) {
+                const body = await res.json();
+                setError(body.error?.message ?? '저장에 실패했습니다.');
+                setLoading(false);
+                return;
+            }
             savedContentRef.current = contentRef.current;
             setEditorKey((k) => k + 1);
             setIsEditing(false);
             setLoading(false);
             router.refresh();
         } catch {
+            setError('저장에 실패했습니다.');
             setLoading(false);
         }
     }
@@ -206,22 +218,25 @@ export default function PostDetail({post, categories}: Props) {
                 className={`milkdown-wrap${isEditing ? '' : ' milkdown-readonly'}`}
             />
 
-            <footer className="mt-12 flex justify-end gap-3 border-t border-zinc-100 pt-6">
-                {isEditing ? (
-                    <>
-                        <Button variant="secondary" onClick={handleCancel} disabled={loading}>
-                            취소
-                        </Button>
-                        <Button onClick={handleSave} disabled={loading}>
-                            {loading ? '저장 중...' : '저장'}
-                        </Button>
-                    </>
-                ) : (
-                    <>
-                        <Button variant="danger" onClick={handleDelete}>삭제</Button>
-                        <Button variant="secondary" onClick={handleEdit}>수정</Button>
-                    </>
-                )}
+            <footer className="mt-12 border-t border-zinc-100 pt-6 space-y-3">
+                {error && <p className="text-sm text-red-500 text-right">{error}</p>}
+                <div className="flex justify-end gap-3">
+                    {isEditing ? (
+                        <>
+                            <Button variant="secondary" onClick={handleCancel} disabled={loading}>
+                                취소
+                            </Button>
+                            <Button onClick={handleSave} disabled={loading}>
+                                {loading ? '저장 중...' : '저장'}
+                            </Button>
+                        </>
+                    ) : (
+                        <>
+                            <Button variant="danger" onClick={handleDelete}>삭제</Button>
+                            <Button variant="secondary" onClick={handleEdit}>수정</Button>
+                        </>
+                    )}
+                </div>
             </footer>
         </article>
     );
