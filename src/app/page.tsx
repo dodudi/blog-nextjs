@@ -3,7 +3,7 @@ import PostFeed from '@/components/post/PostFeed';
 import DraftBanner from '@/components/editor/DraftBanner';
 import {Category, Post} from '@/types';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export default async function HomePage() {
     const [dbPosts, dbCategories, draft] = await Promise.all([

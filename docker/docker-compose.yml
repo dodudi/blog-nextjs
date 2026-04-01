@@ -5,15 +5,21 @@ services:
     ports:
       - "5432:5432"
     command: postgres -c lock_timeout=5000
-    environment:
-      POSTGRES_USER: rudy
-      POSTGRES_PASSWORD: rudy1234
-      POSTGRES_DB: blog
+    env_file:
+      - .env
     restart: unless-stopped
     volumes:
       - ./postgresql-data:/var/lib/postgresql/data
     networks:
       - backend-net
+  app:
+    image: ${DOCKERHUB_USERNAME}/blog-nextjs:latest
+    container_name: rudynote-app
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    restart: unless-stopped
 networks:
   backend-net:
     driver: bridge

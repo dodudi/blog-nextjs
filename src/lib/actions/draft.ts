@@ -17,6 +17,7 @@ export async function saveDraft(data: DraftData) {
         update: {...data, savedAt: new Date()},
         create: {id: 'draft', ...data},
     });
+    revalidatePath('/');
 }
 
 export async function deleteDraft() {

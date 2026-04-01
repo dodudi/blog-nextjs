@@ -14,6 +14,7 @@ export async function addCategory(name: string) {
     });
     revalidatePath('/settings/categories');
     revalidatePath('/write');
+    revalidatePath('/');
 }
 
 export async function deleteCategory(id: string) {

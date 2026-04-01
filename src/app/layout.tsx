@@ -13,9 +13,28 @@ const geistMono = Geist_Mono({
     subsets: ['latin'],
 });
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
+
 export const metadata: Metadata = {
-    title: 'RudyNote',
+    metadataBase: new URL(siteUrl),
+    title: {
+        default: 'RudyNote',
+        template: '%s | RudyNote',
+    },
     description: '배우고, 경험하고, 나누고 싶은 것들을 기록하는 공간',
+    openGraph: {
+        type: 'website',
+        siteName: 'RudyNote',
+        locale: 'ko_KR',
+        title: 'RudyNote',
+        description: '배우고, 경험하고, 나누고 싶은 것들을 기록하는 공간',
+        url: siteUrl,
+    },
+    twitter: {
+        card: 'summary_large_image',
+        title: 'RudyNote',
+        description: '배우고, 경험하고, 나누고 싶은 것들을 기록하는 공간',
+    },
 };
 
 export default function RootLayout({
