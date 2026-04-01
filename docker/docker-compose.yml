@@ -1,0 +1,19 @@
+services:
+  postgresql:
+    image: postgres:14.2
+    container_name: postgresql
+    ports:
+      - "5432:5432"
+    command: postgres -c lock_timeout=5000
+    environment:
+      POSTGRES_USER: rudy
+      POSTGRES_PASSWORD: rudy1234
+      POSTGRES_DB: blog
+    restart: unless-stopped
+    volumes:
+      - ./postgresql-data:/var/lib/postgresql/data
+    networks:
+      - backend-net
+networks:
+  backend-net:
+    driver: bridge

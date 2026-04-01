@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+@plugin "@tailwindcss/typography";
+
+:root {
+    --background: #ffffff;
+    --foreground: #171717;
+}
+
+@theme inline {
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --font-sans: var(--font-geist-sans);
+    --font-mono: var(--font-geist-mono);
+}
+
+body {
+    background: var(--background);
+    color: var(--foreground);
+}
+
+/* Milkdown Crepe 에디터 패딩 조정 */
+.milkdown-wrap .milkdown .ProseMirror {
+    padding: 1rem 1.25rem;
+    min-height: 480px;
+}
+
+.milkdown-wrap .milkdown {
+    background: transparent;
+    font-family: var(--font-geist-sans), sans-serif;
+}
