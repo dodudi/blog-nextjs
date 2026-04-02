@@ -1,7 +1,7 @@
 import {prisma} from '@/lib/db';
 import {Draft} from '@/types';
 
-export interface DraftSaveInput {
+export interface DraftInput {
     title: string;
     content: string;
     category: string;
@@ -33,7 +33,7 @@ export const draftRepository = {
         return row ? mapDraft(row) : null;
     },
 
-    async save(data: DraftSaveInput): Promise<Draft> {
+    async save(data: DraftInput): Promise<Draft> {
         const row = await prisma.draft.upsert({
             where: {id: 'draft'},
             update: {...data, savedAt: new Date()},

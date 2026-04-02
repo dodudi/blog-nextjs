@@ -2,23 +2,8 @@ import {Post} from '@/types';
 import {postRepository} from '@/lib/repositories/postRepository';
 import {NotFoundError} from '@/lib/errors';
 
-export interface PostCreateInput {
-    title: string;
-    content: string;
-    category: string;
-    tags: string[];
-    image: string | null;
-    date: string;
-}
-
-export interface PostUpdateInput {
-    title: string;
-    content: string;
-    category: string;
-    tags: string[];
-    image: string | null;
-    date: string;
-}
+export type {PostInput} from '@/lib/repositories/postRepository';
+import type {PostInput} from '@/lib/repositories/postRepository';
 
 export const postService = {
     async getAll(): Promise<Post[]> {
@@ -31,11 +16,11 @@ export const postService = {
         return post;
     },
 
-    async create(data: PostCreateInput): Promise<Post> {
+    async create(data: PostInput): Promise<Post> {
         return postRepository.create(data);
     },
 
-    async update(id: string, data: PostUpdateInput): Promise<Post> {
+    async update(id: string, data: PostInput): Promise<Post> {
         const existing = await postRepository.findById(id);
         if (!existing) throw new NotFoundError(`Post not found: ${id}`);
         return postRepository.update(id, data);

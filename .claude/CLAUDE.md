@@ -27,17 +27,25 @@ npx prisma generate
 npx prisma studio
 
 # Docker: build and run full stack
-docker compose up --build -d
+cd docker && docker compose up -d
 
 # Docker: stop
-docker compose down
+cd docker && docker compose down
+
+# Generate AUTH_SECRET
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+
+# Generate ADMIN_PASSWORD_HASH (bcrypt, cost=12)
+node -e "const b=require('bcryptjs'); console.log(b.hashSync('yourpassword', 12))"
 ```
 
-`.env` must contain `DATABASE_URL=postgresql://...` for local development. The Docker Compose default is `postgresql://rudy:rudy1234@db:5432/blog`.
+`.env` must contain `DATABASE_URL=postgresql://...` for local development.  
+`.env.local` must contain `AUTH_SECRET`, `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH` for auth.  
+Docker Compose config and `.env.example` are in `docker/`.
 
 ## Architecture
 
-**Stack**: Next.js 16.2 App Router · React 19 · Tailwind CSS v4 · Prisma v5 · PostgreSQL · `@milkdown/crepe` v7
+**Stack**: Next.js 16.2 App Router · React 19 · Tailwind CSS v4 · Prisma v5 · PostgreSQL · `@milkdown/crepe` v7 · Auth.js v5 (next-auth@beta)
 
 ### Layer structure
 
@@ -45,18 +53,21 @@ docker compose down
 Browser
   │
   ├── page request (SSR/ISR)
-  │     └── app/**/page.tsx          (Server Component)
-  │               └── Service
-  │                     └── Repository
-  │                           └── Prisma → PostgreSQL
+  │     └── src/proxy.ts              (Auth.js Edge proxy — route protection)
+  │               └── app/**/page.tsx  (Server Component)
+  │                         └── Service
+  │                               └── Repository
+  │                                     └── Prisma → PostgreSQL
   │
   └── data mutation (fetch)
-        └── app/api/**/route.ts      (API Route Handler)
-                  └── Service
-                        └── Repository
-                              └── Prisma → PostgreSQL
+        └── src/proxy.ts              (Auth.js Edge proxy — 401 for unauthenticated mutations)
+                  └── app/api/**/route.ts  (API Route Handler)
+                            └── Service
+                                  └── Repository
+                                        └── Prisma → PostgreSQL
 ```
 
+- **proxy.ts** (`src/proxy.ts`): Auth.js v5 Edge middleware. Redirects unauthenticated page requests to `/login`, returns 401 for unauthenticated mutation API calls (POST/PUT/DELETE/PATCH).
 - **Server Component** (`app/**/page.tsx`): Calls Service directly, renders initial HTML.
 - **Client Component** (`components/**`): Calls API Routes via `fetch()` for mutations.
 - **API Route** (`app/api/**/route.ts`): Validates input, calls Service, returns JSON.
@@ -67,30 +78,40 @@ Browser
 
 ```
 src/
+├── auth.ts                               # Auth.js v5 config (Credentials provider, JWT callbacks)
+├── proxy.ts                              # Auth.js Edge proxy (route protection, replaces middleware.ts)
 ├── app/
 │   ├── layout.tsx                        # RootLayout (Header, metadataBase, OG defaults)
 │   ├── page.tsx                          # / — ISR (revalidate=0), loads posts/categories/draft
 │   ├── globals.css                       # Tailwind v4 + Milkdown overrides
 │   ├── sitemap.ts                        # /sitemap.xml — dynamic, force-dynamic
 │   ├── robots.ts                         # /robots.txt — disallows /write, /settings/
+│   ├── login/
+│   │   └── page.tsx                      # /login — redirects to / if already authenticated
 │   ├── post/[id]/
 │   │   ├── page.tsx                      # /post/:id — ISR (revalidate=0), generateMetadata, React.cache()
 │   │   └── PostDetailWrapper.tsx         # dynamic-imports PostDetail (ssr: false)
 │   ├── write/
-│   │   └── page.tsx                      # /write — force-dynamic, loads draft + categories
+│   │   └── page.tsx                      # /write — force-dynamic, loads draft + categories (admin only)
 │   ├── settings/categories/
-│   │   └── page.tsx                      # /settings/categories — force-dynamic
+│   │   └── page.tsx                      # /settings/categories — force-dynamic (admin only)
 │   └── api/
+│       ├── auth/
+│       │   └── [...nextauth]/
+│       │       └── route.ts              # Auth.js internal endpoints (login, logout, session)
 │       ├── posts/
-│       │   ├── route.ts                  # GET /api/posts, POST /api/posts
-│       │   └── [id]/route.ts             # GET · PUT · DELETE /api/posts/:id
+│       │   ├── route.ts                  # GET /api/posts (public), POST /api/posts (admin)
+│       │   └── [id]/route.ts             # GET (public) · PUT · DELETE /api/posts/:id (admin)
 │       ├── draft/
-│       │   └── route.ts                  # GET · PUT · DELETE /api/draft
+│       │   └── route.ts                  # GET · PUT · DELETE /api/draft (admin only)
 │       └── categories/
-│           ├── route.ts                  # GET /api/categories, POST /api/categories
-│           └── [id]/route.ts             # DELETE /api/categories/:id
+│           ├── route.ts                  # GET /api/categories (public), POST (admin)
+│           └── [id]/route.ts             # DELETE /api/categories/:id (admin)
 ├── components/
-│   ├── layout/Header.tsx
+│   ├── auth/
+│   │   ├── LoginForm.tsx                 # Client: credentials form, signIn(), error/loading state
+│   │   └── LogoutButton.tsx              # Client: signOut({ callbackUrl: "/" })
+│   ├── layout/Header.tsx                 # async Server Component: session-aware nav (admin vs guest)
 │   ├── post/
 │   │   ├── PostFeed.tsx                  # Client: search/category/tag filter via useMemo
 │   │   ├── PostList.tsx
@@ -109,11 +130,12 @@ src/
 │       ├── Button.tsx                    # primary / secondary / danger variants
 │       └── TagBadge.tsx
 └── lib/
+    ├── auth.ts                           # requireAdminPage() · requireAdminApi() — Defense-in-depth helpers
     ├── db/index.ts                       # Prisma Client singleton (dev hot-reload safe)
     ├── api.ts                            # apiSuccess · apiError · handleError
     ├── errors.ts                         # NotFoundError · ConflictError · ValidationError
     ├── actions/
-    │   └── posts.ts                      # createPost · deletePost (redirect() 필요한 것만)
+    │   └── posts.ts                      # createPost · deletePost (redirect() 필요한 것만, requireAdminPage 포함)
     ├── services/
     │   ├── postService.ts
     │   ├── draftService.ts
@@ -140,6 +162,45 @@ Three Prisma models: `Post`, `Draft`, `Category`.
 - `app/page.tsx` and `app/post/[id]/page.tsx` use `export const revalidate = 0` (ISR — cache forever, invalidated by `revalidatePath`).
 - `app/write/page.tsx` and `app/settings/categories/page.tsx` use `export const dynamic = 'force-dynamic'` (always fresh — these pages must reflect the latest draft/categories on every visit).
 - `app/post/[id]/page.tsx` uses `React.cache()` to deduplicate the `postService.getById` call between `generateMetadata` and the page component.
+- `app/login/page.tsx` uses `auth()` to redirect already-authenticated users to `/`.
+
+### Authentication & Authorization
+
+**Single-admin model** — public read, admin-only write. No user table or sign-up UI.
+
+#### How it works
+
+1. **`src/proxy.ts`** (Auth.js Edge proxy) — 1st layer:
+   - Protected pages (`/write`, `/settings/**`) → redirect to `/login?callbackUrl=...` if unauthenticated
+   - Mutation API methods (POST/PUT/DELETE/PATCH on `/api/**`) → 401 JSON if unauthenticated
+   - GET requests always pass through (public reads)
+
+2. **`src/lib/auth.ts`** helpers — 2nd layer (Defense-in-depth):
+   - `requireAdminPage()`: used in Server Actions — calls `auth()`, redirects to `/login` if no session
+   - `requireAdminApi()`: used in API Routes — calls `auth()`, returns 401 Response if no session
+
+3. **`src/auth.ts`** — Auth.js v5 core config:
+   - Credentials provider: validates `ADMIN_USERNAME` + `bcrypt.compare(password, ADMIN_PASSWORD_HASH)`
+   - JWT session strategy (7-day maxAge), no DB session table
+   - `role: "admin"` injected into JWT and Session via callbacks
+
+#### Session-aware UI
+
+`Header.tsx` is an async Server Component that calls `auth()` and renders:
+- **Admin**: "카테고리" · "새 글" · "로그아웃" (LogoutButton client component)
+- **Guest**: "로그인" link
+
+#### Environment variables required
+
+```
+AUTH_SECRET=<random 32+ bytes, base64>        # JWT signing secret
+ADMIN_USERNAME=rudy                            # Admin login ID
+ADMIN_PASSWORD_HASH=<bcrypt hash, cost=12>     # Never store plaintext password
+```
+
+#### proxy.ts naming
+
+Next.js 16.2 deprecated `middleware.ts` in favor of `proxy.ts`. The Auth.js `auth()` wrapper works identically in both. Do **not** rename back to `middleware.ts`.
 
 ### API Routes
 
@@ -151,11 +212,12 @@ Error mapping in `handleError`:
 - `NotFoundError` → 404
 - `ConflictError` → 409
 - `ValidationError` → 400
+- `UNAUTHORIZED` → 401 (returned directly by proxy.ts or requireAdminApi)
 - Other → 500
 
 ### Server Actions
 
-Only `createPost` and `deletePost` remain in `lib/actions/posts.ts`. These use `redirect()` from `next/navigation` which requires a Server Action context — `redirect()` cannot be used inside an API Route Handler.
+Only `createPost` and `deletePost` remain in `lib/actions/posts.ts`. These use `redirect()` from `next/navigation` which requires a Server Action context — `redirect()` cannot be used inside an API Route Handler. Both call `requireAdminPage()` as the first line.
 
 All other mutations (update post, save/delete draft, add/delete category) use API Route Handlers because they need to return data or don't require a page redirect.
 
@@ -181,7 +243,11 @@ Tailwind v4 — `globals.css` uses `@import "tailwindcss"` and `@plugin "@tailwi
 
 ### Docker deployment
 
-`next.config.ts` sets `output: 'standalone'`. The Dockerfile uses a multi-stage build (base → deps → builder → runner) and copies standalone output plus Prisma binaries (`node_modules/.prisma`, `node_modules/@prisma`, `node_modules/prisma`). On container startup, `prisma migrate deploy` runs before `node server.js`.
+`next.config.ts` sets `output: 'standalone'`. Docker config lives in `docker/` directory:
+- `docker/docker-compose.yml`: postgresql + app services. App service uses `env_file: .env` + explicit `environment` entries for auth vars.
+- `docker/.env.example`: template for all required variables (copy to `docker/.env` before running).
+
+On container startup, `prisma migrate deploy` runs before `node server.js`.
 
 ### Prisma version constraint
 

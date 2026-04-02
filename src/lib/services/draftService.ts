@@ -1,13 +1,8 @@
 import {Draft} from '@/types';
 import {draftRepository} from '@/lib/repositories/draftRepository';
 
-export interface DraftInput {
-    title: string;
-    content: string;
-    category: string;
-    tags: string[];
-    image: string | null;
-}
+export type {DraftInput} from '@/lib/repositories/draftRepository';
+import type {DraftInput} from '@/lib/repositories/draftRepository';
 
 export const draftService = {
     async get(): Promise<Draft | null> {

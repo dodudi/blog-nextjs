@@ -56,7 +56,4 @@ body {
     & .cm-activeLine {
         background-color: transparent !important;
     }
-
-    & .cm-editor .cm-selectionLayer .cm-selectionBackground {
-    }
 }

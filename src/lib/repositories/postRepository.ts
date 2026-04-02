@@ -1,16 +1,7 @@
 import {prisma} from '@/lib/db';
 import {Post} from '@/types';
 
-export interface PostCreateInput {
-    title: string;
-    content: string;
-    category: string;
-    tags: string[];
-    image: string | null;
-    date: string;
-}
-
-export interface PostUpdateInput {
+export interface PostInput {
     title: string;
     content: string;
     category: string;
@@ -54,12 +45,12 @@ export const postRepository = {
         return row ? mapPost(row) : null;
     },
 
-    async create(data: PostCreateInput): Promise<Post> {
+    async create(data: PostInput): Promise<Post> {
         const row = await prisma.post.create({data});
         return mapPost(row);
     },
 
-    async update(id: string, data: PostUpdateInput): Promise<Post> {
+    async update(id: string, data: PostInput): Promise<Post> {
         const row = await prisma.post.update({where: {id}, data});
         return mapPost(row);
     },
