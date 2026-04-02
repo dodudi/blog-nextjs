@@ -35,12 +35,11 @@ cd docker && docker compose down
 # Generate AUTH_SECRET
 node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 
-# Generate ADMIN_PASSWORD_HASH (bcrypt, cost=12)
-node -e "const b=require('bcryptjs'); console.log(b.hashSync('yourpassword', 12))"
+# Generate ADMIN_PASSWORD_HASH_B64 (bcrypt cost=12, Base64 encoded)
+node -e "const b=require('bcryptjs'); console.log(Buffer.from(b.hashSync('yourpassword',12)).toString('base64'))"
 ```
 
-`.env` must contain `DATABASE_URL=postgresql://...` for local development.  
-`.env.local` must contain `AUTH_SECRET`, `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH` for auth.  
+`.env.local` must contain `DATABASE_URL`, `AUTH_SECRET`, `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH_B64`.  
 Docker Compose config and `.env.example` are in `docker/`.
 
 ## Architecture
@@ -78,7 +77,7 @@ Browser
 
 ```
 src/
-├── auth.ts                               # Auth.js v5 config (Credentials provider, JWT callbacks)
+├── auth.ts                               # Auth.js v5 config (Credentials provider, JWT callbacks) — uses config
 ├── proxy.ts                              # Auth.js Edge proxy (route protection, replaces middleware.ts)
 ├── app/
 │   ├── layout.tsx                        # RootLayout (Header, metadataBase, OG defaults)
@@ -130,7 +129,8 @@ src/
 │       ├── Button.tsx                    # primary / secondary / danger variants
 │       └── TagBadge.tsx
 └── lib/
-    ├── auth.ts                           # requireAdminPage() · requireAdminApi() — Defense-in-depth helpers
+    ├── config.ts                         # 환경변수 중앙화 — config.site.url · config.admin.{username,passwordHash}
+    ├── auth.ts                           # requireAdminPage() — Server Action 인증 guard
     ├── db/index.ts                       # Prisma Client singleton (dev hot-reload safe)
     ├── api.ts                            # apiSuccess · apiError · handleError
     ├── errors.ts                         # NotFoundError · ConflictError · ValidationError
@@ -141,8 +141,8 @@ src/
     │   ├── draftService.ts
     │   └── categoryService.ts
     ├── repositories/
-    │   ├── postRepository.ts             # Post Prisma queries + Date → ISO string
-    │   ├── draftRepository.ts            # Draft Prisma queries + Date → ISO string
+    │   ├── postRepository.ts             # Post Prisma queries + Date → ISO string — exports PostInput
+    │   ├── draftRepository.ts            # Draft Prisma queries + Date → ISO string — exports DraftInput
     │   └── categoryRepository.ts        # Category Prisma queries + clearPostCategory
     ├── readingTime.ts                    # readingTime(content), summarize(content)
     └── highlight.ts                      # getHighlightParts(text, query)
@@ -177,10 +177,9 @@ Three Prisma models: `Post`, `Draft`, `Category`.
 
 2. **`src/lib/auth.ts`** helpers — 2nd layer (Defense-in-depth):
    - `requireAdminPage()`: used in Server Actions — calls `auth()`, redirects to `/login` if no session
-   - `requireAdminApi()`: used in API Routes — calls `auth()`, returns 401 Response if no session
 
 3. **`src/auth.ts`** — Auth.js v5 core config:
-   - Credentials provider: validates `ADMIN_USERNAME` + `bcrypt.compare(password, ADMIN_PASSWORD_HASH)`
+   - Credentials provider: validates `config.admin.username` + `bcrypt.compare(password, config.admin.passwordHash)`
    - JWT session strategy (7-day maxAge), no DB session table
    - `role: "admin"` injected into JWT and Session via callbacks
 
@@ -193,14 +192,46 @@ Three Prisma models: `Post`, `Draft`, `Category`.
 #### Environment variables required
 
 ```
-AUTH_SECRET=<random 32+ bytes, base64>        # JWT signing secret
-ADMIN_USERNAME=rudy                            # Admin login ID
-ADMIN_PASSWORD_HASH=<bcrypt hash, cost=12>     # Never store plaintext password
+AUTH_SECRET=<random 32+ bytes, base64>         # JWT signing secret (Auth.js reads directly)
+ADMIN_USERNAME=rudy                             # Admin login ID
+ADMIN_PASSWORD_HASH_B64=<base64 encoded hash>  # bcrypt hash (cost=12) encoded as Base64
+```
+
+`ADMIN_PASSWORD_HASH_B64` 는 bcrypt 해시를 Base64로 인코딩해서 저장한다.  
+dotenv-expand 가 bcrypt 해시의 `$` 를 변수로 해석하는 문제를 방지하기 위함이다.  
+`config.ts` 에서 `Buffer.from(value, 'base64').toString()` 으로 복원한다.
+
+생성 명령:
+```bash
+node -e "const b=require('bcryptjs'); console.log(Buffer.from(b.hashSync('yourpassword',12)).toString('base64'))"
 ```
 
 #### proxy.ts naming
 
 Next.js 16.2 deprecated `middleware.ts` in favor of `proxy.ts`. The Auth.js `auth()` wrapper works identically in both. Do **not** rename back to `middleware.ts`.
+
+### Config module
+
+`src/lib/config.ts` 가 모든 환경변수 참조의 단일 진실 공급원이다.
+
+```typescript
+export const config = {
+    site: { url },          // NEXT_PUBLIC_SITE_URL (fallback: http://localhost:3000)
+    admin: {
+        username,           // ADMIN_USERNAME
+        passwordHash,       // ADMIN_PASSWORD_HASH_B64 → Base64 디코딩한 bcrypt 해시
+    },
+} as const;
+```
+
+- `requireEnv(key)` 헬퍼로 필수 변수 누락 시 서버 시작 즉시 오류 발생
+- `DATABASE_URL` (Prisma), `AUTH_SECRET` (Auth.js), `NODE_ENV` (프레임워크 내장)은 config 대상 외
+- `process.env.ADMIN_*` 와 `process.env.NEXT_PUBLIC_SITE_URL` 을 소스에서 직접 참조하지 말 것
+
+### Input types
+
+`PostInput` (create/update 공통) 은 `postRepository.ts` 에서 정의하고 `postService.ts` 가 re-export 한다.  
+`DraftInput` 은 `draftRepository.ts` 에서 정의하고 `draftService.ts` 가 re-export 한다.
 
 ### API Routes
 
@@ -212,7 +243,7 @@ Error mapping in `handleError`:
 - `NotFoundError` → 404
 - `ConflictError` → 409
 - `ValidationError` → 400
-- `UNAUTHORIZED` → 401 (returned directly by proxy.ts or requireAdminApi)
+- `UNAUTHORIZED` → 401 (returned directly by proxy.ts)
 - Other → 500
 
 ### Server Actions
@@ -245,7 +276,7 @@ Tailwind v4 — `globals.css` uses `@import "tailwindcss"` and `@plugin "@tailwi
 
 `next.config.ts` sets `output: 'standalone'`. Docker config lives in `docker/` directory:
 - `docker/docker-compose.yml`: postgresql + app services. App service uses `env_file: .env` + explicit `environment` entries for auth vars.
-- `docker/.env.example`: template for all required variables (copy to `docker/.env` before running).
+- `docker/.env.example`: template for all required variables (copy to `docker/.env` before running). Uses `ADMIN_PASSWORD_HASH_B64`.
 
 On container startup, `prisma migrate deploy` runs before `node server.js`.
 
