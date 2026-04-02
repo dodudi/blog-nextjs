@@ -1,10 +1,11 @@
 import type {MetadataRoute} from 'next';
 import {prisma} from '@/lib/db';
+import {config} from '@/lib/config';
 
 export const dynamic = 'force-dynamic';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
+    const siteUrl = config.site.url;
 
     const posts = await prisma.post.findMany({
         select: {id: true, updatedAt: true},

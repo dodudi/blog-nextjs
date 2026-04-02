@@ -2,6 +2,7 @@ import type {Metadata} from 'next';
 import {Geist, Geist_Mono} from 'next/font/google';
 import './globals.css';
 import Header from '@/components/layout/Header';
+import {config} from '@/lib/config';
 
 const geistSans = Geist({
     variable: '--font-geist-sans',
@@ -13,7 +14,7 @@ const geistMono = Geist_Mono({
     subsets: ['latin'],
 });
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
+const siteUrl = config.site.url;
 
 export const metadata: Metadata = {
     metadataBase: new URL(siteUrl),
