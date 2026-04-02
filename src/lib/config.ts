@@ -9,7 +9,7 @@ export const config = {
         url: process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000',
     },
     admin: {
-        username: requireEnv('ADMIN_USERNAME'),
-        passwordHash: Buffer.from(requireEnv('ADMIN_PASSWORD_HASH_B64'), 'base64').toString(),
+        get username() { return requireEnv('ADMIN_USERNAME'); },
+        get passwordHash() { return Buffer.from(requireEnv('ADMIN_PASSWORD_HASH_B64'), 'base64').toString(); },
     },
-} as const;
+};
