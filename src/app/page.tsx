@@ -1,6 +1,7 @@
 import PostFeed from '@/components/post/PostFeed';
 import DraftBanner from '@/components/editor/DraftBanner';
 import ProfileCard from '@/components/layout/ProfileCard';
+import StatsCard from '@/components/layout/StatsCard';
 import {postService} from '@/lib/services/postService';
 import {categoryService} from '@/lib/services/categoryService';
 import {draftService} from '@/lib/services/draftService';
@@ -24,8 +25,13 @@ export default async function HomePage() {
         <div className="mx-auto max-w-[1000px] px-4 py-6 sm:py-10">
             {isAdmin && draft && <DraftBanner/>}
             <div className="flex gap-8">
-                <aside className="hidden lg:block w-[240px] shrink-0">
+                <aside className="hidden lg:block w-[240px] shrink-0 space-y-3">
                     <ProfileCard/>
+                    <StatsCard
+                        postCount={posts.length}
+                        categoryCount={categories.length}
+                        tagCount={allTags.length}
+                    />
                 </aside>
                 <div className="flex-1 min-w-0">
                     <PostFeed posts={posts} categories={categories} allTags={allTags}/>
