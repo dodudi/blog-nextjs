@@ -10,6 +10,7 @@ import {deletePost} from '@/lib/actions/posts';
 import TagBadge from '@/components/ui/TagBadge';
 import Button from '@/components/ui/Button';
 import {readingTime} from '@/lib/readingTime';
+import ShareButtons from '@/components/post/ShareButtons';
 
 interface Props {
     post: Post;
@@ -219,6 +220,7 @@ export default function PostDetail({post, categories, relatedPosts, isAdmin}: Pr
                 ref={containerRef}
                 className={`milkdown-wrap${isEditing ? '' : ' milkdown-readonly'}`}
             />
+            {!isEditing && <ShareButtons title={title}/>}
             {relatedPosts.length > 0 && (
                 <section className="mt-12 border-t border-zinc-100 pt-6">
                     <h2 className="text-sm font-medium text-zinc-500 mb-4">관련 글</h2>
@@ -234,6 +236,7 @@ export default function PostDetail({post, categories, relatedPosts, isAdmin}: Pr
                     </ul>
                 </section>
             )}
+
             <footer className="mt-12 border-t border-zinc-100 pt-6 space-y-3">
                 {error && <p className="text-sm text-red-500 text-right">{error}</p>}
                 <div className="flex justify-end gap-3">
