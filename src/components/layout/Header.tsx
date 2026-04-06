@@ -8,7 +8,7 @@ export default async function Header() {
 
     return (
         <header className="sticky top-0 z-50 w-full border-b border-zinc-100 bg-white">
-            <div className="mx-auto flex h-14 max-w-[720px] items-center justify-between px-4">
+            <div className="mx-auto flex h-14 max-w-[1000px] items-center justify-between px-4">
                 <Link
                     href="/"
                     className="text-base font-semibold tracking-tight text-zinc-900"

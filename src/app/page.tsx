@@ -1,5 +1,6 @@
 import PostFeed from '@/components/post/PostFeed';
 import DraftBanner from '@/components/editor/DraftBanner';
+import ProfileCard from '@/components/layout/ProfileCard';
 import {postService} from '@/lib/services/postService';
 import {categoryService} from '@/lib/services/categoryService';
 import {draftService} from '@/lib/services/draftService';
@@ -20,9 +21,16 @@ export default async function HomePage() {
     const allTags = [...new Set(posts.flatMap((p) => p.tags))].sort();
 
     return (
-        <div className="mx-auto max-w-[720px] px-4 py-6 sm:py-10">
+        <div className="mx-auto max-w-[1000px] px-4 py-6 sm:py-10">
             {isAdmin && draft && <DraftBanner/>}
-            <PostFeed posts={posts} categories={categories} allTags={allTags}/>
+            <div className="flex gap-8">
+                <aside className="hidden lg:block w-[240px] shrink-0">
+                    <ProfileCard/>
+                </aside>
+                <div className="flex-1 min-w-0">
+                    <PostFeed posts={posts} categories={categories} allTags={allTags}/>
+                </div>
+            </div>
         </div>
     );
 }
