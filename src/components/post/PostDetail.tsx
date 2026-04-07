@@ -7,6 +7,7 @@ import '@milkdown/crepe/theme/common/style.css';
 import '@milkdown/crepe/theme/frame.css';
 import {Category, Post} from '@/types';
 import {deletePost} from '@/lib/actions/posts';
+import {uploadImage} from '@/lib/uploadImage';
 import TagBadge from '@/components/ui/TagBadge';
 import Button from '@/components/ui/Button';
 import {readingTime} from '@/lib/readingTime';
@@ -51,6 +52,13 @@ export default function PostDetail({post, categories, relatedPosts, isAdmin}: Pr
                 [CrepeFeature.Toolbar]: false,
                 [CrepeFeature.TopBar]: false,
                 [CrepeFeature.Latex]: false,
+            },
+            featureConfigs: {
+                [CrepeFeature.ImageBlock]: {
+                    onUpload: uploadImage,
+                    inlineOnUpload: uploadImage,
+                    blockOnUpload: uploadImage,
+                },
             },
         });
 

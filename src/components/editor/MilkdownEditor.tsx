@@ -4,6 +4,7 @@ import {useEffect, useRef} from 'react';
 import {Crepe, CrepeFeature} from '@milkdown/crepe';
 import '@milkdown/crepe/theme/common/style.css';
 import '@milkdown/crepe/theme/frame.css';
+import {uploadImage} from '@/lib/uploadImage';
 
 interface Props {
     defaultValue?: string;
@@ -26,6 +27,13 @@ export default function MilkdownEditor({defaultValue = '', onChange}: Props) {
                 [CrepeFeature.Toolbar]: false,
                 [CrepeFeature.TopBar]: false,
                 [CrepeFeature.Latex]: false,
+            },
+            featureConfigs: {
+                [CrepeFeature.ImageBlock]: {
+                    onUpload: uploadImage,
+                    inlineOnUpload: uploadImage,
+                    blockOnUpload: uploadImage,
+                },
             },
         });
 

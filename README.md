@@ -12,6 +12,7 @@
 | ORM | Prisma v5 |
 | Database | PostgreSQL 16 |
 | Language | TypeScript 5 |
+| Auth | Auth.js v5 (next-auth@beta) |
 | Deployment | Docker, GitHub Actions |
 
 ---
@@ -155,34 +156,55 @@ flowchart LR
 
 ## 주요 기능
 
-### 글 목록 (홈)
+### 홈 레이아웃 (2컬럼)
+
+데스크톱(`lg` 이상)에서 좌측 사이드바 + 우측 글 목록 구조:
+
+- **프로필 카드** — 이름, 소개, GitHub · 이메일 링크 (클립보드 복사 버튼 포함), sticky 고정
+- **통계 위젯** — 총 게시글 수 · 카테고리 수 · 태그 수 (추가 DB 쿼리 없이 홈 데이터 재사용)
+- 모바일/태블릿에서는 사이드바 숨김, 단일 컬럼
+
+### 글 목록
+
 - 전체 글 서버사이드 로딩 후 클라이언트에서 필터링 (`useMemo`)
 - 제목·본문·태그 통합 검색, 검색어 하이라이트
-- 카테고리 필터, 태그 필터 (복수 선택 가능)
+- 카테고리 필터, 태그 필터
 - 작성 중인 임시저장 글이 있으면 상단 배너 표시
 
 ### 글 작성
+
 - Milkdown 마크다운 에디터 (코드 하이라이트 포함)
 - 제목, 카테고리, 날짜, 태그, 대표 이미지 설정
 - **자동 임시저장** — 입력 후 2초 debounce로 `PUT /api/draft` 호출
 - 페이지 재방문 시 임시저장 내용 자동 복원
 
-### 글 상세 · 편집
+### 글 상세
+
+콘텐츠 순서 (위 → 아래):
+
+1. 메타 정보 (카테고리 · 읽기 시간 · 제목 · 날짜 · 태그)
+2. 본문 (Milkdown readonly 렌더링)
+3. **공유 버튼** — URL 복사 · X · LinkedIn · Reddit (수정 모드에서 자동 숨김)
+4. **관련 글** — 같은 카테고리 또는 태그 기준 최대 3편
+5. 수정 · 삭제 버튼 (어드민 전용)
+
+### 글 편집
+
 - 수정 버튼 클릭 시 **인플레이스 편집** (페이지 이동 없음)
 - 제목, 본문, 카테고리, 날짜, 태그 수정 → `PUT /api/posts/:id`
 - 저장 실패 시 에러 메시지 표시
-- `React.cache()`로 `generateMetadata`와 페이지 본문의 중복 DB 쿼리 제거
 
 ### 카테고리 관리
-- 카테고리 추가(`POST /api/categories`) · 삭제(`DELETE /api/categories/:id`)
+
+- 카테고리 추가 · 삭제
 - 삭제 시 해당 카테고리를 사용 중인 글의 `category` 필드를 빈 문자열로 자동 초기화
-- API 응답 기반 상태 업데이트 (낙관적 업데이트 없음)
 
 ---
 
 ## 로컬 개발
 
 ### 요구사항
+
 - Node.js 20+
 - PostgreSQL 실행 중
 
@@ -193,8 +215,8 @@ flowchart LR
 npm install
 
 # 2. 환경변수 설정
-cp .env.example .env
-# .env 에서 DATABASE_URL 수정
+cp docker/.env.example .env.local
+# .env.local 에서 DATABASE_URL, AUTH_SECRET, ADMIN_USERNAME, ADMIN_PASSWORD_HASH_B64 설정
 
 # 3. DB 마이그레이션
 npx prisma migrate dev
@@ -204,6 +226,24 @@ npm run dev
 ```
 
 브라우저에서 `http://localhost:3000` 접속
+
+### 환경변수
+
+| 변수 | 설명 |
+|---|---|
+| `DATABASE_URL` | PostgreSQL 연결 문자열 |
+| `AUTH_SECRET` | JWT 서명 시크릿 (32바이트 이상 랜덤값) |
+| `ADMIN_USERNAME` | 관리자 로그인 ID |
+| `ADMIN_PASSWORD_HASH_B64` | bcrypt 해시(cost=12)를 Base64 인코딩한 값 |
+| `NEXT_PUBLIC_SITE_URL` | 운영 도메인 (SEO, sitemap 기준 URL) |
+
+```bash
+# AUTH_SECRET 생성
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+
+# ADMIN_PASSWORD_HASH_B64 생성
+node -e "const b=require('bcryptjs'); console.log(Buffer.from(b.hashSync('yourpassword',12)).toString('base64'))"
+```
 
 ### 명령어
 
@@ -224,21 +264,14 @@ npx prisma studio                            # DB GUI
 ### 환경변수 설정
 
 ```bash
-cp .env.example .env
+cp docker/.env.example docker/.env
+# docker/.env 에서 각 변수 설정
 ```
-
-| 변수 | 설명 |
-|---|---|
-| `DOCKERHUB_USERNAME` | Docker Hub 아이디 |
-| `DATABASE_URL` | PostgreSQL 연결 문자열 |
-| `NEXT_PUBLIC_SITE_URL` | 운영 도메인 (SEO, sitemap 기준 URL) |
-| `POSTGRES_USER` | DB 계정 |
-| `POSTGRES_PASSWORD` | DB 비밀번호 |
-| `POSTGRES_DB` | DB 이름 |
 
 ### Docker Hub 이미지로 실행
 
 ```bash
+cd docker
 docker compose pull
 docker compose up -d
 ```
@@ -247,9 +280,10 @@ docker compose up -d
 
 ### 로컬 빌드로 실행
 
-`docker-compose.yml`의 `image:` 줄을 `build: .`으로 교체 후:
+`docker-compose.yml`의 `image:` 줄을 `build: ..`으로 교체 후:
 
 ```bash
+cd docker
 docker compose up --build -d
 ```
 
@@ -283,7 +317,7 @@ flowchart LR
 src/
 ├── app/
 │   ├── layout.tsx                      # 루트 레이아웃, 공통 metadata · OG · Twitter
-│   ├── page.tsx                        # 홈 (ISR revalidate: 0)
+│   ├── page.tsx                        # 홈 (ISR revalidate: 0) — 2컬럼 레이아웃
 │   ├── globals.css                     # Tailwind v4, Milkdown 스타일 오버라이드
 │   ├── sitemap.ts                      # /sitemap.xml 동적 생성
 │   ├── robots.ts                       # /robots.txt (/write, /settings 차단)
@@ -304,16 +338,20 @@ src/
 │   └── settings/categories/
 │       └── page.tsx                    # 카테고리 관리 (force-dynamic)
 ├── components/
-│   ├── layout/Header.tsx
+│   ├── layout/
+│   │   ├── Header.tsx                  # async Server Component, session-aware nav
+│   │   ├── ProfileCard.tsx             # Client: 프로필 카드 (이름·소개·링크·복사 버튼)
+│   │   └── StatsCard.tsx               # Server: 통계 위젯 (게시글·카테고리·태그 수)
 │   ├── post/
-│   │   ├── PostFeed.tsx                # 클라이언트 필터링 (useMemo)
+│   │   ├── PostFeed.tsx                # Client: 검색·카테고리·태그 필터 (useMemo)
 │   │   ├── PostList.tsx
 │   │   ├── PostCard.tsx                # 검색어 하이라이트
-│   │   └── PostDetail.tsx             # 상세 뷰 + 인플레이스 편집 (PUT /api/posts/:id)
+│   │   ├── PostDetail.tsx              # 상세 뷰 + 인플레이스 편집
+│   │   └── ShareButtons.tsx            # Client: URL 복사 · X · LinkedIn · Reddit 공유
 │   ├── editor/
 │   │   ├── MilkdownEditor.tsx          # Milkdown Crepe 래퍼 (ssr: false)
 │   │   ├── WriteForm.tsx               # 작성 폼, 2초 debounce 자동 임시저장
-│   │   └── DraftBanner.tsx             # 임시저장 배너 (DELETE /api/draft)
+│   │   └── DraftBanner.tsx             # 임시저장 존재 시 홈 상단 배너
 │   ├── filter/
 │   │   ├── SearchBar.tsx
 │   │   ├── CategoryFilter.tsx
@@ -323,19 +361,21 @@ src/
 │       ├── Button.tsx                  # primary · secondary · danger
 │       └── TagBadge.tsx
 └── lib/
+    ├── config.ts                       # 환경변수 중앙화 (config.site.url · config.admin.*)
+    ├── auth.ts                         # requireAdminPage() — Server Action 인증 guard
     ├── db/index.ts                     # Prisma 싱글톤
     ├── api.ts                          # apiSuccess · apiError · handleError
     ├── errors.ts                       # NotFoundError · ConflictError · ValidationError
     ├── actions/
-    │   └── posts.ts                    # createPost · deletePost (redirect 필요한 것만 유지)
+    │   └── posts.ts                    # createPost · deletePost (redirect 필요한 것만)
     ├── services/
-    │   ├── postService.ts              # 글 비즈니스 로직
-    │   ├── draftService.ts             # 임시저장 비즈니스 로직
-    │   └── categoryService.ts          # 카테고리 비즈니스 로직
+    │   ├── postService.ts
+    │   ├── draftService.ts
+    │   └── categoryService.ts
     ├── repositories/
     │   ├── postRepository.ts           # Post Prisma 쿼리 + 날짜 변환
     │   ├── draftRepository.ts          # Draft Prisma 쿼리 + 날짜 변환
-    │   └── categoryRepository.ts       # Category Prisma 쿼리 + 날짜 변환
+    │   └── categoryRepository.ts       # Category Prisma 쿼리 + clearPostCategory
     ├── readingTime.ts                  # readingTime() · summarize()
     └── highlight.ts                    # getHighlightParts()
 ```
