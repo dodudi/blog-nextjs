@@ -12,6 +12,20 @@ services:
       - ./postgresql-data:/var/lib/postgresql/data
     networks:
       - backend-net
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    env_file:
+      - .env
+    volumes:
+      - ./minio-data:/data
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+    networks:
+      - backend-net
   app:
     image: ${DOCKERHUB_USERNAME}/blog-nextjs:latest
     container_name: rudynote-app
@@ -20,8 +34,9 @@ services:
     env_file:
       - .env
     restart: unless-stopped
-    volumes:
-      - ./uploads:/app/public/uploads
+    depends_on:
+      - postgresql
+      - minio
     networks:
       - backend-net
 networks:

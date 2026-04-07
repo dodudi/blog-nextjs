@@ -1,6 +1,6 @@
 import {NextRequest} from 'next/server';
-import {writeFile, mkdir} from 'fs/promises';
-import {join} from 'path';
+import {S3Client, PutObjectCommand, CreateBucketCommand, PutBucketPolicyCommand, HeadBucketCommand} from '@aws-sdk/client-s3';
+import {config} from '@/lib/config';
 import {apiSuccess, apiError, handleError} from '@/lib/api';
 import {ValidationError} from '@/lib/errors';
 
@@ -23,8 +23,45 @@ function detectMime(buf: Uint8Array): string | null {
     return null;
 }
 
-function getUploadDir(): string {
-    return process.env.UPLOAD_DIR ?? join(process.cwd(), 'public', 'uploads');
+function makeClient() {
+    return new S3Client({
+        endpoint: config.minio.endpoint,
+        region: 'us-east-1',
+        credentials: {
+            accessKeyId: config.minio.accessKeyId,
+            secretAccessKey: config.minio.secretKey,
+        },
+        forcePathStyle: true,
+    });
+}
+
+let bucketReady = false;
+
+async function ensureBucket(client: S3Client) {
+    if (bucketReady) return;
+
+    const bucket = config.minio.bucket;
+
+    try {
+        await client.send(new HeadBucketCommand({Bucket: bucket}));
+    } catch {
+        await client.send(new CreateBucketCommand({Bucket: bucket}));
+    }
+
+    await client.send(new PutBucketPolicyCommand({
+        Bucket: bucket,
+        Policy: JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [{
+                Effect: 'Allow',
+                Principal: {AWS: ['*']},
+                Action: ['s3:GetObject'],
+                Resource: [`arn:aws:s3:::${bucket}/*`],
+            }],
+        }),
+    }));
+
+    bucketReady = true;
 }
 
 export async function POST(request: NextRequest) {
@@ -53,12 +90,19 @@ export async function POST(request: NextRequest) {
 
         const ext = MIME_TO_EXT[file.type];
         const filename = `${crypto.randomUUID()}${ext}`;
-        const dir = getUploadDir();
 
-        await mkdir(dir, {recursive: true});
-        await writeFile(join(dir, filename), buffer);
+        const client = makeClient();
+        await ensureBucket(client);
 
-        return apiSuccess({url: `/uploads/${filename}`}, 201);
+        await client.send(new PutObjectCommand({
+            Bucket: config.minio.bucket,
+            Key: filename,
+            Body: buffer,
+            ContentType: file.type,
+        }));
+
+        const url = `${config.minio.publicUrl}/${config.minio.bucket}/${filename}`;
+        return apiSuccess({url}, 201);
     } catch (e) {
         return handleError(e);
     }
