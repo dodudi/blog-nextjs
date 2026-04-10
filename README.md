@@ -311,6 +311,47 @@ flowchart LR
 
 ---
 
+## 인프라 구조
+
+라즈베리파이 홈 서버에서 Docker Compose로 운영하며, Nginx가 외부 요청을 받아 Next.js 앱으로 전달합니다.
+
+```mermaid
+flowchart TD
+    User["외부 사용자"]
+
+    subgraph RPi["라즈베리파이 (홈 서버)"]
+        direction TB
+        Nginx["리버스 프록시 :443"]
+
+        subgraph Compose["Docker Compose"]
+            App["Next.js App\n:3000"]
+            DB[("PostgreSQL\n:5432")]
+        end
+
+        Nginx -- "proxy_pass → :3000" --> App
+        App -- "Prisma ORM" --> DB
+    end
+
+    subgraph GitHub["GitHub"]
+        GHA["GitHub Actions\nCI/CD"]
+        Hub["Docker Hub\nlatest · arm64/amd64"]
+    end
+
+    User -- "HTTPS" --> Nginx
+    GHA -- "main push → 빌드 & 푸시" --> Hub
+    Hub -. "docker compose pull" .-> App
+```
+
+| 구성 요소 | 역할 |
+|---|---|
+| **Nginx** | 외부 80/443 포트 수신, TLS 종단, `proxy_pass`로 앱(:3000) 전달 |
+| **Next.js App** | SSR/ISR 페이지, API Routes, Server Actions 처리 |
+| **PostgreSQL** | 블로그 데이터 영구 저장, Docker 내부 네트워크로만 접근 |
+| **GitHub Actions** | `main` push 시 멀티 아키텍처(amd64 · arm64) 이미지 빌드 & 푸시 |
+| **Docker Hub** | 빌드된 이미지 저장소, 라즈베리파이에서 `pull`로 배포 |
+
+---
+
 ## 프로젝트 구조
 
 ```
